@@ -5,19 +5,6 @@ on:
       image:
         type: string
         required: true
-      platforms:
-        type: string
-        required: false
-        default: linux/amd64,linux/arm64
-      push:
-        type: boolean
-        required: false
-        default: true
-    secrets:
-      registry_username:
-        required: false
-      registry_password:
-        required: false
 
 jobs:
   run:
@@ -29,7 +16,3 @@ jobs:
       attestations: write
     steps:
       - uses: actions/checkout@v6
-      - uses: docker/setup-qemu-action@v4
-        with:
-          platforms: ${{ inputs.platforms }}
-      - uses: docker/setup-buildx-action@v4
