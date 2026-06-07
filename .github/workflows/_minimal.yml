@@ -37,25 +37,11 @@ on:
         type: string
         required: false
         default: ""
-    secrets:
-      registry_username:
-        required: false
-      registry_password:
-        required: false
-    outputs:
-      image_ref:
-        description: x
-        value: ${{ jobs.run.outputs.image_ref }}
 
 jobs:
   run:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
-      id-token: write
-      attestations: write
-    outputs:
-      image_ref: ""
     steps:
       - run: echo "inputs OK image=${{ inputs.image }}"
