@@ -1,0 +1,145 @@
+# Reusable workflow: package a Helm chart and push it to an OCI
+# registry (default: GHCR under the repo owner).
+#
+# Requires Helm 3.8+ which is provided by setup-tools (azure/setup-helm@v4).
+# Caller must declare `permissions: { contents: read, packages: write }`.
+name: helm-oci-push
+
+on:
+  workflow_call:
+    inputs:
+      chart_dir:
+        description: "Directory containing Chart.yaml."
+        type: string
+        required: false
+        default: "./chart"
+      registry:
+        description: "Target OCI registry URL incl. oci:// scheme."
+        type: string
+        required: false
+        default: "oci://ghcr.io/${{ github.repository_owner }}"
+      chart_version:
+        description: "Override chart version. Empty leaves Chart.yaml as-is."
+        type: string
+        required: false
+        default: ""
+      app_version:
+        description: "Override appVersion. Empty leaves Chart.yaml as-is."
+        type: string
+        required: false
+        default: ""
+      lint:
+        description: "Run helm lint before packaging."
+        type: boolean
+        required: false
+        default: true
+      sign:
+        description: "Reserved for future cosign signing. Currently a no-op (warns)."
+        type: boolean
+        required: false
+        default: false
+    secrets:
+      registry_username:
+        description: "Override for non-GHCR registry. Defaults to github.actor."
+        required: false
+      registry_password:
+        description: "Override for non-GHCR registry. Defaults to github.token."
+        required: false
+    outputs:
+      chart_name:
+        description: "Chart name read from Chart.yaml."
+        value: ${{ jobs.push.outputs.chart_name }}
+      chart_version:
+        description: "Final chart version after override."
+        value: ${{ jobs.push.outputs.chart_version }}
+      chart_ref:
+        description: "Full pushed reference, e.g. ghcr.io/owner/charts/foo:1.2.3."
+        value: ${{ jobs.push.outputs.chart_ref }}
+
+permissions: {}
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      chart_name: ${{ steps.meta.outputs.chart_name }}
+      chart_version: ${{ steps.meta.outputs.chart_version }}
+      chart_ref: ${{ steps.publish.outputs.chart_ref }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Helm
+        uses: ./.github/actions/setup-tools
+        with:
+          tools: helm
+
+      - name: Read chart metadata
+        id: meta
+        run: |
+          set -euo pipefail
+          chart_dir="${{ inputs.chart_dir }}"
+          if [ ! -f "$chart_dir/Chart.yaml" ]; then
+            echo "::error::Chart.yaml not found at $chart_dir/Chart.yaml"
+            exit 1
+          fi
+          name="$(awk '/^name:/ {print $2; exit}' "$chart_dir/Chart.yaml")"
+          version="$(awk '/^version:/ {print $2; exit}' "$chart_dir/Chart.yaml")"
+          override="${{ inputs.chart_version }}"
+          if [ -n "$override" ]; then
+            version="$override"
+          fi
+          echo "chart_name=$name" >> "$GITHUB_OUTPUT"
+          echo "chart_version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Lint chart
+        if: inputs.lint
+        run: helm lint "${{ inputs.chart_dir }}"
+
+      - name: Warn on unsupported sign flag
+        if: inputs.sign
+        run: |
+          echo "::warning::sign=true is reserved for future cosign integration; skipping."
+
+      - name: Package chart
+        run: |
+          set -euo pipefail
+          args=()
+          if [ -n "${{ inputs.chart_version }}" ]; then
+            args+=(--version "${{ inputs.chart_version }}")
+          fi
+          if [ -n "${{ inputs.app_version }}" ]; then
+            args+=(--app-version "${{ inputs.app_version }}")
+          fi
+          helm package "${{ inputs.chart_dir }}" --destination "$RUNNER_TEMP" "${args[@]}"
+
+      - name: Log in to OCI registry
+        env:
+          REGISTRY: ${{ inputs.registry }}
+        run: |
+          set -euo pipefail
+          host="${REGISTRY#oci://}"
+          host="${host%%/*}"
+          username="${{ secrets.registry_username || github.actor }}"
+          password="${{ secrets.registry_password || github.token }}"
+          echo "$password" | helm registry login "$host" --username "$username" --password-stdin
+
+      - name: Push chart
+        id: publish
+        env:
+          CHART_NAME: ${{ steps.meta.outputs.chart_name }}
+          CHART_VERSION: ${{ steps.meta.outputs.chart_version }}
+          REGISTRY: ${{ inputs.registry }}
+        run: |
+          set -euo pipefail
+          tgz="$RUNNER_TEMP/${CHART_NAME}-${CHART_VERSION}.tgz"
+          if [ ! -f "$tgz" ]; then
+            echo "::error::Packaged chart not found at $tgz"
+            exit 1
+          fi
+          helm push "$tgz" "$REGISTRY"
+          host="${REGISTRY#oci://}"
+          echo "chart_ref=${host}/${CHART_NAME}:${CHART_VERSION}" >> "$GITHUB_OUTPUT"

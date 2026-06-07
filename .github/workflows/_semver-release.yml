@@ -1,0 +1,110 @@
+# Reusable workflow: on a v*.*.* tag push, generate a
+# Conventional-Commits changelog and publish a GitHub Release with
+# optional asset uploads.
+#
+# Caller must:
+#   - trigger the calling job on `push: tags: ['v*.*.*']`.
+#   - declare `permissions: contents: write` on the calling job.
+#
+# Uses softprops/action-gh-release@v2 for asset glob support; no
+# release-please / semantic-release dependency.
+name: semver-release
+
+on:
+  workflow_call:
+    inputs:
+      assets:
+        description: "Newline-separated globs of files to attach to the release."
+        type: string
+        required: false
+        default: ""
+      body_path:
+        description: "Path to a file used as the release body. When unset, a generated changelog is used."
+        type: string
+        required: false
+        default: ""
+      prerelease:
+        description: "Mark release as pre-release."
+        type: boolean
+        required: false
+        default: false
+      draft:
+        description: "Create as draft."
+        type: boolean
+        required: false
+        default: false
+      tag_name:
+        description: "Tag to release. Defaults to the pushed tag."
+        type: string
+        required: false
+        default: ${{ github.ref_name }}
+      previous_tag:
+        description: "Override previous tag for changelog range. Empty = auto-detect."
+        type: string
+        required: false
+        default: ""
+    outputs:
+      release_url:
+        description: "HTML URL of the created release."
+        value: ${{ jobs.release.outputs.release_url }}
+      release_id:
+        description: "Numeric release id."
+        value: ${{ jobs.release.outputs.release_id }}
+      previous_tag:
+        description: "Resolved previous tag used for the changelog."
+        value: ${{ jobs.release.outputs.previous_tag }}
+
+permissions: {}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      release_url: ${{ steps.publish.outputs.url }}
+      release_id: ${{ steps.publish.outputs.id }}
+      previous_tag: ${{ steps.changelog.outputs.previous_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Generate changelog
+        id: changelog
+        if: inputs.body_path == ''
+        run: |
+          set -euo pipefail
+          prev="${{ inputs.previous_tag }}"
+          if [ -z "$prev" ]; then
+            prev="$(git describe --tags --abbrev=0 "${{ inputs.tag_name }}^" 2>/dev/null || true)"
+          fi
+          echo "previous_tag=$prev" >> "$GITHUB_OUTPUT"
+
+          chmod +x ./scripts/changelog.sh
+          {
+            echo 'body<<CHANGELOG_EOF'
+            if [ -n "$prev" ]; then
+              ./scripts/changelog.sh "$prev" "${{ inputs.tag_name }}"
+            else
+              echo "## ${{ inputs.tag_name }}"
+              echo
+              echo "Initial release."
+            fi
+            echo 'CHANGELOG_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        id: publish
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ inputs.tag_name }}
+          name: ${{ inputs.tag_name }}
+          draft: ${{ inputs.draft }}
+          prerelease: ${{ inputs.prerelease }}
+          body: ${{ inputs.body_path == '' && steps.changelog.outputs.body || '' }}
+          body_path: ${{ inputs.body_path }}
+          files: ${{ inputs.assets }}
+          fail_on_unmatched_files: false
