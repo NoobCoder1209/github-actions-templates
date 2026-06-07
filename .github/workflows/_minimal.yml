@@ -10,11 +10,17 @@ on:
         required: false
       registry_password:
         required: false
+    outputs:
+      image_ref:
+        description: x
+        value: ${{ jobs.run.outputs.image_ref }}
 
 jobs:
   run:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      image_ref: stub
     steps:
       - run: echo "inputs OK image=${{ inputs.image }}"
