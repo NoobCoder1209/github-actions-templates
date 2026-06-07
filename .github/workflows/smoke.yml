@@ -1,4 +1,6 @@
 # Smoke test: self-call _docker-buildx.yml against fixtures/docker.
+# Single-arch, no push, no provenance — purely verifies the reusable
+# workflow's wiring on every PR.
 name: smoke
 
 on:
@@ -8,7 +10,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  reusable-call:
+  docker-buildx-smoke:
     permissions:
       contents: read
       packages: read
@@ -17,6 +19,7 @@ jobs:
     uses: ./.github/workflows/_docker-buildx.yml
     with:
       image: smoke/hello
+      tag: smoke-${{ github.run_id }}
       context: ./fixtures/docker
       dockerfile: Dockerfile
       platforms: linux/amd64

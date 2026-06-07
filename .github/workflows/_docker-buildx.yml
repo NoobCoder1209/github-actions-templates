@@ -20,10 +20,10 @@ on:
         type: string
         required: true
       tag:
-        description: "Primary tag (extra tags from metadata-action are also applied)."
+        description: "Primary tag (extra tags from metadata-action are also applied). Defaults to the run's commit SHA when empty."
         type: string
         required: false
-        default: ${{ github.sha }}
+        default: ""
       platforms:
         description: "Comma-separated buildx platforms."
         type: string

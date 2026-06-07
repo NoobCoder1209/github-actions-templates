@@ -34,10 +34,10 @@ on:
         required: false
         default: false
       tag_name:
-        description: "Tag to release. Defaults to the pushed tag."
+        description: "Tag to release. Empty = use the pushed tag (github.ref_name)."
         type: string
         required: false
-        default: ${{ github.ref_name }}
+        default: ""
       previous_tag:
         description: "Override previous tag for changelog range. Empty = auto-detect."
         type: string
@@ -75,7 +75,7 @@ jobs:
         if: inputs.body_path == ''
         env:
           PREV_INPUT: ${{ inputs.previous_tag }}
-          TAG_NAME: ${{ inputs.tag_name }}
+          TAG_NAME: ${{ inputs.tag_name != '' && inputs.tag_name || github.ref_name }}
         run: |
           set -euo pipefail
           prev="$PREV_INPUT"
@@ -101,8 +101,8 @@ jobs:
         id: publish
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ inputs.tag_name }}
-          name: ${{ inputs.tag_name }}
+          tag_name: ${{ inputs.tag_name != '' && inputs.tag_name || github.ref_name }}
+          name: ${{ inputs.tag_name != '' && inputs.tag_name || github.ref_name }}
           draft: ${{ inputs.draft }}
           prerelease: ${{ inputs.prerelease }}
           body: ${{ inputs.body_path == '' && steps.changelog.outputs.body || '' }}

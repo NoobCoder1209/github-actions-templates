@@ -14,10 +14,10 @@ on:
         required: false
         default: "./chart"
       registry:
-        description: "Target OCI registry URL incl. oci:// scheme."
+        description: "Target OCI registry URL incl. oci:// scheme. Empty = oci://ghcr.io/<repo-owner>."
         type: string
         required: false
-        default: "oci://ghcr.io/${{ github.repository_owner }}"
+        default: ""
       chart_version:
         description: "Override chart version. Empty leaves Chart.yaml as-is."
         type: string
@@ -124,7 +124,7 @@ jobs:
 
       - name: Log in to OCI registry
         env:
-          REGISTRY: ${{ inputs.registry }}
+          REGISTRY: ${{ inputs.registry != '' && inputs.registry || format('oci://ghcr.io/{0}', github.repository_owner) }}
           REGISTRY_USERNAME: ${{ secrets.registry_username || github.actor }}
           REGISTRY_PASSWORD: ${{ secrets.registry_password || github.token }}
         run: |
@@ -138,7 +138,7 @@ jobs:
         env:
           CHART_NAME: ${{ steps.meta.outputs.chart_name }}
           CHART_VERSION: ${{ steps.meta.outputs.chart_version }}
-          REGISTRY: ${{ inputs.registry }}
+          REGISTRY: ${{ inputs.registry != '' && inputs.registry || format('oci://ghcr.io/{0}', github.repository_owner) }}
         run: |
           set -euo pipefail
           tgz="$RUNNER_TEMP/${CHART_NAME}-${CHART_VERSION}.tgz"
