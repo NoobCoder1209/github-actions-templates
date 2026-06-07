@@ -1,0 +1,25 @@
+# Example consumer for _trivy-scan.yml.
+#
+# Pattern: trigger on workflow_run completion of a build workflow,
+# scan the freshly-built image, upload SARIF to the Security tab,
+# fail on CRITICAL/HIGH/MEDIUM.
+name: image-scan
+
+on:
+  workflow_run:
+    workflows: ['build']
+    types: [completed]
+
+jobs:
+  scan:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      contents: read
+      security-events: write
+      packages: read
+    uses: NoobCoder1209/github-actions-templates/.github/workflows/_trivy-scan.yml@v0.1.0
+    with:
+      image: ghcr.io/${{ github.repository_owner }}/example-hello:${{ github.event.workflow_run.head_sha }}
+      severity: CRITICAL,HIGH,MEDIUM
+      ignore_unfixed: true
+      exit_code: '1'
