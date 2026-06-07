@@ -5,47 +5,19 @@ on:
       image:
         type: string
         required: true
-      tag:
-        type: string
-        required: false
-        default: ""
       platforms:
         type: string
         required: false
         default: linux/amd64,linux/arm64
-      context:
-        type: string
-        required: false
-        default: "."
-      dockerfile:
-        type: string
-        required: false
-        default: Dockerfile
       push:
         type: boolean
         required: false
         default: true
-      registry:
-        type: string
-        required: false
-        default: ghcr.io
-      provenance:
-        type: boolean
-        required: false
-        default: true
-      build-args:
-        type: string
-        required: false
-        default: ""
     secrets:
       registry_username:
         required: false
       registry_password:
         required: false
-    outputs:
-      image_ref:
-        description: x
-        value: ${{ jobs.run.outputs.image_ref }}
 
 jobs:
   run:
@@ -55,24 +27,9 @@ jobs:
       packages: write
       id-token: write
       attestations: write
-    outputs:
-      image_ref: stub
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+      - uses: actions/checkout@v6
+      - uses: docker/setup-qemu-action@v4
         with:
           platforms: ${{ inputs.platforms }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to registry
-        if: inputs.push
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ inputs.registry }}
-          username: ${{ secrets.registry_username || github.actor }}
-          password: ${{ secrets.registry_password || github.token }}
+      - uses: docker/setup-buildx-action@v4
