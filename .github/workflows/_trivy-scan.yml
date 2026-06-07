@@ -1,0 +1,104 @@
+# Reusable workflow: scan a built container image with Trivy, upload
+# the SARIF report to the GitHub Security tab unconditionally, then
+# fail the job in a separate gating pass at the configured severity.
+#
+# Two-pass pattern: keeps the Security tab populated even when the
+# build fails the gate. Trivy's DB is cached between steps so the
+# second pass is near-instant.
+name: trivy-scan
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: "Image reference incl. tag/digest."
+        type: string
+        required: true
+      severity:
+        description: "Comma-separated Trivy severity floor."
+        type: string
+        required: false
+        default: "CRITICAL,HIGH,MEDIUM"
+      ignore_unfixed:
+        description: "Skip vulns with no upstream fix."
+        type: boolean
+        required: false
+        default: true
+      exit_code:
+        description: "Exit code for the gating pass. Set 0 to scan-only."
+        type: string
+        required: false
+        default: "1"
+      scan_type:
+        description: "Trivy scan type: image | fs | repo."
+        type: string
+        required: false
+        default: "image"
+      vuln_type:
+        description: "Comma-separated vuln types."
+        type: string
+        required: false
+        default: "os,library"
+      category:
+        description: "SARIF category for Security tab grouping."
+        type: string
+        required: false
+        default: "trivy"
+    outputs:
+      sarif_path:
+        description: "Path of the uploaded SARIF file."
+        value: ${{ jobs.scan.outputs.sarif_path }}
+      vulnerabilities_found:
+        description: "'true' if the gating pass found vulnerabilities."
+        value: ${{ jobs.scan.outputs.vulnerabilities_found }}
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      packages: read
+    outputs:
+      sarif_path: trivy-results.sarif
+      vulnerabilities_found: ${{ steps.mark.outputs.found || 'false' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Trivy scan (SARIF, non-blocking)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ inputs.image }}
+          scan-type: ${{ inputs.scan_type }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: ${{ inputs.severity }}
+          vuln-type: ${{ inputs.vuln_type }}
+          ignore-unfixed: ${{ inputs.ignore_unfixed }}
+          exit-code: "0"
+          limit-severities-for-sarif: "true"
+
+      - name: Upload SARIF to GitHub Security tab
+        if: always() && hashFiles('trivy-results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-results.sarif
+          category: ${{ inputs.category }}
+
+      - name: Trivy scan (gate)
+        id: gate
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ inputs.image }}
+          scan-type: ${{ inputs.scan_type }}
+          format: table
+          severity: ${{ inputs.severity }}
+          vuln-type: ${{ inputs.vuln_type }}
+          ignore-unfixed: ${{ inputs.ignore_unfixed }}
+          exit-code: ${{ inputs.exit_code }}
+
+      - name: Mark vulnerabilities found
+        id: mark
+        if: always() && steps.gate.outcome == 'failure'
+        run: echo "found=true" >> "$GITHUB_OUTPUT"

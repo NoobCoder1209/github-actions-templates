@@ -1,0 +1,21 @@
+# Example consumer for _semver-release.yml.
+#
+# Trigger: pushing a v*.*.* tag (e.g. `git tag v1.2.3 && git push origin v1.2.3`).
+# Generates a Conventional-Commits changelog and attaches assets.
+name: release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+jobs:
+  publish:
+    permissions:
+      contents: write
+    uses: NoobCoder1209/github-actions-templates/.github/workflows/_semver-release.yml@v0.1.0
+    with:
+      assets: |
+        dist/*.tar.gz
+        dist/*.sha256
+      prerelease: false
+      draft: false

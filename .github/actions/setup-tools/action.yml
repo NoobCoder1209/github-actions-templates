@@ -1,0 +1,117 @@
+name: setup-tools
+description: "Install a curated set of CLI tools (helm, kubectl, kind, terraform, tflint, helm-docs)."
+inputs:
+  tools:
+    description: "Comma-separated list of tools to install."
+    required: true
+  helm-version:
+    description: "Pin for helm."
+    required: false
+    default: latest
+  kubectl-version:
+    description: "Pin for kubectl."
+    required: false
+    default: latest
+  kind-version:
+    description: "Pin for kind (used only if 'kind' is requested)."
+    required: false
+    default: v0.27.0
+  terraform-version:
+    description: "Pin for terraform."
+    required: false
+    default: latest
+  tflint-version:
+    description: "Pin for tflint."
+    required: false
+    default: latest
+  helm-docs-version:
+    description: "Pin for helm-docs."
+    required: false
+    default: v1.14.2
+
+runs:
+  using: composite
+  steps:
+    - name: Parse requested tools
+      id: parse
+      shell: bash
+      env:
+        TOOLS_INPUT: ${{ inputs.tools }}
+      run: |
+        set -euo pipefail
+        IFS=',' read -ra REQ <<< "${TOOLS_INPUT}"
+        for raw in "${REQ[@]}"; do
+          t="$(echo "$raw" | xargs)"
+          case "$t" in
+            helm)        echo "want_helm=true"      >> "$GITHUB_OUTPUT" ;;
+            kubectl)     echo "want_kubectl=true"   >> "$GITHUB_OUTPUT" ;;
+            kind)        echo "want_kind=true"      >> "$GITHUB_OUTPUT" ;;
+            terraform)   echo "want_terraform=true" >> "$GITHUB_OUTPUT" ;;
+            tflint)      echo "want_tflint=true"    >> "$GITHUB_OUTPUT" ;;
+            helm-docs)   echo "want_helm_docs=true" >> "$GITHUB_OUTPUT" ;;
+            "") ;;
+            *) echo "::error::Unknown tool: $t (supported: helm, kubectl, kind, terraform, tflint, helm-docs)"; exit 1 ;;
+          esac
+        done
+
+    - name: Install helm
+      if: steps.parse.outputs.want_helm == 'true'
+      uses: azure/setup-helm@v5
+      with:
+        version: ${{ inputs.helm-version }}
+
+    - name: Install kubectl
+      if: steps.parse.outputs.want_kubectl == 'true'
+      uses: azure/setup-kubectl@v5
+      with:
+        version: ${{ inputs.kubectl-version }}
+
+    - name: Install kind
+      if: steps.parse.outputs.want_kind == 'true'
+      shell: bash
+      env:
+        KIND_VERSION: ${{ inputs.kind-version }}
+      run: |
+        set -euo pipefail
+        arch="$(uname -m)"
+        case "$arch" in
+          x86_64) arch=amd64 ;;
+          aarch64|arm64) arch=arm64 ;;
+        esac
+        curl -fsSL -o /tmp/kind \
+          "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-${arch}"
+        chmod +x /tmp/kind
+        sudo mv /tmp/kind /usr/local/bin/kind
+        kind --version
+
+    - name: Install terraform
+      if: steps.parse.outputs.want_terraform == 'true'
+      uses: hashicorp/setup-terraform@v4
+      with:
+        terraform_version: ${{ inputs.terraform-version }}
+
+    - name: Install tflint
+      if: steps.parse.outputs.want_tflint == 'true'
+      uses: terraform-linters/setup-tflint@v6
+      with:
+        tflint_version: ${{ inputs.tflint-version }}
+
+    - name: Install helm-docs
+      if: steps.parse.outputs.want_helm_docs == 'true'
+      shell: bash
+      env:
+        HELM_DOCS_VERSION: ${{ inputs.helm-docs-version }}
+      run: |
+        set -euo pipefail
+        version="${HELM_DOCS_VERSION#v}"
+        arch="$(uname -m)"
+        case "$arch" in
+          x86_64) arch=x86_64 ;;
+          aarch64|arm64) arch=arm64 ;;
+        esac
+        url="https://github.com/norwoodj/helm-docs/releases/download/v${version}/helm-docs_${version}_Linux_${arch}.tar.gz"
+        tmp="$(mktemp -d)"
+        curl -fsSL -o "$tmp/helm-docs.tgz" "$url"
+        tar -xzf "$tmp/helm-docs.tgz" -C "$tmp"
+        sudo mv "$tmp/helm-docs" /usr/local/bin/helm-docs
+        helm-docs --version

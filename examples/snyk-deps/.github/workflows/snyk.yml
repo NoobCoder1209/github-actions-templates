@@ -1,0 +1,24 @@
+# Example consumer for _snyk-deps.yml (Node project shown).
+#
+# Requires a SNYK_TOKEN secret in the calling repo.
+# Severity threshold is `medium` — locked stricter than Snyk's `high` default.
+name: snyk
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  deps:
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    uses: NoobCoder1209/github-actions-templates/.github/workflows/_snyk-deps.yml@v0.1.0
+    with:
+      language: node
+      severity_threshold: medium
+      args: --all-projects
+    secrets:
+      snyk_token: ${{ secrets.SNYK_TOKEN }}

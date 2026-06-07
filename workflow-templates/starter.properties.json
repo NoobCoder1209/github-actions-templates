@@ -1,0 +1,7 @@
+{
+  "name": "Build & Push Container Image (GHCR)",
+  "description": "Multi-arch Docker build with SLSA provenance, pushed to GHCR. Uses NoobCoder1209/github-actions-templates reusable workflows.",
+  "iconName": "starter",
+  "categories": ["Continuous integration", "Docker", "Deployment"],
+  "filePatterns": ["Dockerfile"]
+}

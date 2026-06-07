@@ -1,0 +1,142 @@
+# Reusable workflow: Snyk dependency scan for a node|python|go
+# project. Uploads SARIF to the GitHub Security tab and fails the job
+# when issues are found at or above the configured severity.
+#
+# Snyk's per-language actions exit non-zero when issues are found,
+# which would skip the SARIF upload. We use continue-on-error and a
+# separate gate step to keep the upload + fail behaviours independent.
+name: snyk-deps
+
+on:
+  workflow_call:
+    inputs:
+      language:
+        description: "Project language: node | python | go."
+        type: string
+        required: true
+      severity_threshold:
+        description: "Snyk threshold: low | medium | high | critical."
+        type: string
+        required: false
+        default: "medium"
+      args:
+        description: "Extra Snyk CLI args. Default scans the repo root with --all-projects."
+        type: string
+        required: false
+        default: "--all-projects"
+      runtime_version:
+        description: "Optional runtime pin (Node/Python/Go version)."
+        type: string
+        required: false
+        default: ""
+      category:
+        description: "SARIF category."
+        type: string
+        required: false
+        default: "snyk"
+    secrets:
+      snyk_token:
+        description: "Snyk API token."
+        required: true
+    outputs:
+      sarif_path:
+        description: "Path of the uploaded SARIF file."
+        value: ${{ jobs.scan.outputs.sarif_path }}
+      issues_found:
+        description: "'true' if Snyk found any issues at or above the threshold."
+        value: ${{ jobs.scan.outputs.issues_found }}
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    outputs:
+      sarif_path: snyk.sarif
+      issues_found: ${{ steps.snyk-node.outcome == 'failure' || steps.snyk-python.outcome == 'failure' || steps.snyk-go.outcome == 'failure' }}
+    steps:
+      - name: Validate language
+        env:
+          LANGUAGE: ${{ inputs.language }}
+        run: |
+          set -euo pipefail
+          case "$LANGUAGE" in
+            node|python|go) ;;
+            *) echo "::error::language must be one of node|python|go (got '$LANGUAGE')"; exit 1 ;;
+          esac
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        if: inputs.language == 'node'
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ inputs.runtime_version || '20' }}
+
+      - name: Set up Python
+        if: inputs.language == 'python'
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ inputs.runtime_version || '3.12' }}
+
+      - name: Set up Go
+        if: inputs.language == 'go'
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ inputs.runtime_version || 'stable' }}
+
+      - name: Snyk test (Node)
+        id: snyk-node
+        if: inputs.language == 'node'
+        continue-on-error: true
+        uses: snyk/actions/node@v1
+        env:
+          SNYK_TOKEN: ${{ secrets.snyk_token }}
+        with:
+          args: ${{ inputs.args }} --severity-threshold=${{ inputs.severity_threshold }} --sarif-file-output=snyk.sarif
+
+      - name: Snyk test (Python)
+        id: snyk-python
+        if: inputs.language == 'python'
+        continue-on-error: true
+        uses: snyk/actions/python@v1
+        env:
+          SNYK_TOKEN: ${{ secrets.snyk_token }}
+        with:
+          args: ${{ inputs.args }} --severity-threshold=${{ inputs.severity_threshold }} --sarif-file-output=snyk.sarif
+
+      - name: Snyk test (Go)
+        id: snyk-go
+        if: inputs.language == 'go'
+        continue-on-error: true
+        uses: snyk/actions/golang@v1
+        env:
+          SNYK_TOKEN: ${{ secrets.snyk_token }}
+        with:
+          args: ${{ inputs.args }} --severity-threshold=${{ inputs.severity_threshold }} --sarif-file-output=snyk.sarif
+
+      - name: Upload SARIF to GitHub Security tab
+        if: always() && hashFiles('snyk.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: snyk.sarif
+          category: ${{ inputs.category }}-${{ inputs.language }}
+
+      - name: Gate
+        env:
+          SEVERITY_THRESHOLD: ${{ inputs.severity_threshold }}
+        run: |
+          set -euo pipefail
+          # Aggregate outcomes from the three language-specific Snyk steps.
+          # Skipped steps report 'skipped' as outcome — only 'failure' fails the gate.
+          outcomes="${{ steps.snyk-node.outcome }} ${{ steps.snyk-python.outcome }} ${{ steps.snyk-go.outcome }}"
+          for o in $outcomes; do
+            if [ "$o" = "failure" ]; then
+              echo "Snyk reported issues at or above threshold '$SEVERITY_THRESHOLD'"
+              exit 1
+            fi
+          done
+          echo "No Snyk issues at or above threshold."

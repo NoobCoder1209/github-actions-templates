@@ -1,0 +1,28 @@
+# Example consumer for _docker-buildx.yml.
+#
+# Copy this into a target repo's .github/workflows/build.yml.
+# Pin the @v0.1.0 tag — never use @main.
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  image:
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    uses: NoobCoder1209/github-actions-templates/.github/workflows/_docker-buildx.yml@v0.1.0
+    with:
+      image: ${{ github.repository }}
+      platforms: linux/amd64,linux/arm64
+      context: .
+      dockerfile: Dockerfile
+      push: ${{ github.event_name != 'pull_request' }}
+      provenance: true

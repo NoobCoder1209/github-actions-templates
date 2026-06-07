@@ -1,0 +1,160 @@
+# Reusable workflow: build a multi-arch container image, optionally push
+# to GHCR (or any OCI registry), and emit SLSA build provenance.
+#
+# Caller responsibilities:
+#   - declare the elevated permissions on the calling job
+#     (id-token: write, attestations: write, packages: write) — these
+#     are NOT inherited from this callee's permissions block.
+#   - pin to a tagged version (e.g. @v0.1.0) — never @main.
+#
+# Default registry is GHCR using the auto-issued GITHUB_TOKEN, so no
+# secrets are required. Pass `registry_username` / `registry_password`
+# to push elsewhere.
+name: docker-buildx
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: "Image name without registry/tag, e.g. owner/app. Registry is prepended automatically."
+        type: string
+        required: true
+      tag:
+        description: "Primary tag (extra tags from metadata-action are also applied). Defaults to the run's commit SHA when empty."
+        type: string
+        required: false
+        default: ""
+      platforms:
+        description: "Comma-separated buildx platforms."
+        type: string
+        required: false
+        default: linux/amd64,linux/arm64
+      context:
+        description: "Build context path."
+        type: string
+        required: false
+        default: "."
+      dockerfile:
+        description: "Dockerfile path relative to the context."
+        type: string
+        required: false
+        default: Dockerfile
+      push:
+        description: "Push the image to the registry. When false, builds only."
+        type: boolean
+        required: false
+        default: true
+      registry:
+        description: "Registry hostname (no scheme)."
+        type: string
+        required: false
+        default: ghcr.io
+      provenance:
+        description: "Emit SLSA build provenance + image attestation."
+        type: boolean
+        required: false
+        default: true
+      build-args:
+        description: "Newline-separated KEY=VALUE pairs forwarded to buildx."
+        type: string
+        required: false
+        default: ""
+    secrets:
+      registry_username:
+        description: "Override for non-GHCR registry. Defaults to github.actor."
+        required: false
+      registry_password:
+        description: "Override for non-GHCR registry. Defaults to github.token."
+        required: false
+    outputs:
+      image_ref:
+        description: "Full pushed reference incl. digest."
+        value: ${{ jobs.build.outputs.image_ref }}
+      tags:
+        description: "Newline list of all tags applied."
+        value: ${{ jobs.build.outputs.tags }}
+      digest:
+        description: "Image digest (sha256:...)."
+        value: ${{ jobs.build.outputs.digest }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    outputs:
+      image_ref: ${{ steps.ref.outputs.ref }}
+      tags: ${{ steps.meta.outputs.tags }}
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+        with:
+          platforms: ${{ inputs.platforms }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to registry
+        if: inputs.push
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ secrets.registry_username || github.actor }}
+          password: ${{ secrets.registry_password || github.token }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ inputs.registry }}/${{ inputs.image }}
+          tags: |
+            type=sha,format=long
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ inputs.tag }},enable=${{ inputs.tag != '' }}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.context }}/${{ inputs.dockerfile }}
+          platforms: ${{ inputs.platforms }}
+          push: ${{ inputs.push }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: ${{ inputs.build-args }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: ${{ inputs.provenance && 'mode=max' || 'false' }}
+          sbom: ${{ inputs.provenance }}
+
+      - name: Compute pushed image reference
+        id: ref
+        if: inputs.push && steps.build.outputs.digest != ''
+        env:
+          REGISTRY: ${{ inputs.registry }}
+          IMAGE: ${{ inputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          echo "ref=${REGISTRY}/${IMAGE}@${DIGEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Attest build provenance
+        if: inputs.push && inputs.provenance && steps.build.outputs.digest != ''
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ inputs.registry }}/${{ inputs.image }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true

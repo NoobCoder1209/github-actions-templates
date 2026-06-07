@@ -1,0 +1,19 @@
+# Example consumer for _helm-oci-push.yml.
+#
+# Trigger: pushing a chart-v*.*.* tag.
+# Pushes the packaged chart to ghcr.io/<owner>/<chart-name>:<version>.
+name: publish-chart
+
+on:
+  push:
+    tags: ['chart-v*.*.*']
+
+jobs:
+  push:
+    permissions:
+      contents: read
+      packages: write
+    uses: NoobCoder1209/github-actions-templates/.github/workflows/_helm-oci-push.yml@v0.1.0
+    with:
+      chart_dir: ./chart
+      lint: true
