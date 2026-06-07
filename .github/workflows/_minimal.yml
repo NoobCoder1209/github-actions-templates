@@ -5,49 +5,16 @@ on:
       image:
         type: string
         required: true
-      tag:
-        type: string
+    secrets:
+      registry_username:
         required: false
-        default: ""
-      platforms:
-        type: string
+      registry_password:
         required: false
-        default: linux/amd64,linux/arm64
-      context:
-        type: string
-        required: false
-        default: "."
-      dockerfile:
-        type: string
-        required: false
-        default: Dockerfile
-      push:
-        type: boolean
-        required: false
-        default: true
-      registry:
-        type: string
-        required: false
-        default: ghcr.io
-      provenance:
-        type: boolean
-        required: false
-        default: true
-      build-args:
-        type: string
-        required: false
-        default: ""
-    outputs:
-      image_ref:
-        description: x
-        value: ${{ jobs.run.outputs.image_ref }}
 
 jobs:
   run:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    outputs:
-      image_ref: stub
     steps:
       - run: echo "inputs OK image=${{ inputs.image }}"
