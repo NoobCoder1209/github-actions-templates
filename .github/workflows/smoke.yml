@@ -8,11 +8,17 @@ on:
   workflow_dispatch:
 
 jobs:
-  inline-sanity:
-    runs-on: ubuntu-latest
+  reusable-call:
     permissions:
       contents: read
-    steps:
-      - uses: actions/checkout@v6
-      - name: Confirm smoke triggers reach a job
-        run: echo "smoke wiring OK"
+      packages: read
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/_docker-buildx.yml
+    with:
+      image: smoke/hello
+      context: ./fixtures/docker
+      dockerfile: Dockerfile
+      platforms: linux/amd64
+      push: false
+      provenance: false
