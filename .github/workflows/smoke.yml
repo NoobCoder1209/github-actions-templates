@@ -1,4 +1,15 @@
+# Smoke test: self-call _docker-buildx.yml against fixtures/docker.
+# Single-arch, no push, no provenance — purely verifies the reusable
+# workflow's wiring on every PR.
+#
+# The calling job grants every elevated permission the callee
+# declares (packages:write, id-token:write, attestations:write) even
+# though we pass push:false / provenance:false. Caller-side perms
+# are checked statically against what the callee REQUESTS, not what
+# the callee actually uses at runtime — a callee can only RECEIVE
+# perms the caller already holds.
 name: smoke
+
 on:
   push:
     branches: [main]
@@ -6,9 +17,18 @@ on:
   workflow_dispatch:
 
 jobs:
-  call-minimal:
+  docker-buildx-smoke:
     permissions:
       contents: read
-    uses: ./.github/workflows/_minimal.yml
+      packages: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/_docker-buildx.yml
     with:
       image: smoke/hello
+      tag: smoke-${{ github.run_id }}
+      context: ./fixtures/docker
+      dockerfile: Dockerfile
+      platforms: linux/amd64
+      push: false
+      provenance: false
