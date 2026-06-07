@@ -1,0 +1,17 @@
+name: minimal-callee
+
+on:
+  workflow_call:
+    inputs:
+      msg:
+        type: string
+        required: false
+        default: "hello"
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - run: echo "${{ inputs.msg }}"
