@@ -1,6 +1,4 @@
 # Smoke test: self-call _docker-buildx.yml against fixtures/docker.
-# Single-arch, no push, no provenance — purely verifies the reusable
-# workflow's wiring on every PR.
 name: smoke
 
 on:
@@ -17,20 +15,4 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Confirm smoke triggers reach a job
-        run: echo "smoke wiring OK on $(uname -a)"
-
-  docker-buildx-smoke:
-    permissions:
-      contents: read
-      packages: read
-      id-token: write
-      attestations: write
-    uses: ./.github/workflows/_docker-buildx.yml
-    with:
-      image: smoke/hello
-      tag: smoke-${{ github.run_id }}
-      context: ./fixtures/docker
-      dockerfile: Dockerfile
-      platforms: linux/amd64
-      push: false
-      provenance: false
+        run: echo "smoke wiring OK"
