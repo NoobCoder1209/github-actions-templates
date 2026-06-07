@@ -10,6 +10,15 @@ on:
   workflow_dispatch:
 
 jobs:
+  inline-sanity:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - name: Confirm smoke triggers reach a job
+        run: echo "smoke wiring OK on $(uname -a)"
+
   docker-buildx-smoke:
     permissions:
       contents: read
