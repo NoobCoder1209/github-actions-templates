@@ -1,0 +1,23 @@
+# Local-only files
+*.local
+*.local.yml
+*.local.yaml
+.env
+.env.*
+*.env
+*.secret
+*.key
+*.pem
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Build artifacts (in case anyone runs act locally)
+*.tgz
+*.sarif
+
+# Plan working files
+PLAN.md.new
