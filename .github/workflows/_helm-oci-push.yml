@@ -1,7 +1,7 @@
 # Reusable workflow: package a Helm chart and push it to an OCI
 # registry (default: GHCR under the repo owner).
 #
-# Requires Helm 3.8+ which is provided by setup-tools (azure/setup-helm@v4).
+# Requires Helm 3.8+ which is provided by setup-tools (azure/setup-helm@v5).
 # Caller must declare `permissions: { contents: read, packages: write }`.
 name: helm-oci-push
 
@@ -56,8 +56,6 @@ on:
         description: "Full pushed reference, e.g. ghcr.io/owner/charts/foo:1.2.3."
         value: ${{ jobs.push.outputs.chart_ref }}
 
-permissions: {}
-
 jobs:
   push:
     runs-on: ubuntu-latest
@@ -79,25 +77,29 @@ jobs:
 
       - name: Read chart metadata
         id: meta
+        env:
+          CHART_DIR: ${{ inputs.chart_dir }}
+          CHART_VERSION_OVERRIDE: ${{ inputs.chart_version }}
         run: |
           set -euo pipefail
-          chart_dir="${{ inputs.chart_dir }}"
-          if [ ! -f "$chart_dir/Chart.yaml" ]; then
-            echo "::error::Chart.yaml not found at $chart_dir/Chart.yaml"
+          if [ ! -f "$CHART_DIR/Chart.yaml" ]; then
+            echo "::error::Chart.yaml not found at $CHART_DIR/Chart.yaml"
             exit 1
           fi
-          name="$(awk '/^name:/ {print $2; exit}' "$chart_dir/Chart.yaml")"
-          version="$(awk '/^version:/ {print $2; exit}' "$chart_dir/Chart.yaml")"
-          override="${{ inputs.chart_version }}"
-          if [ -n "$override" ]; then
-            version="$override"
+          # Use helm's own parser to handle quoted/escaped values correctly.
+          name="$(helm show chart "$CHART_DIR" | awk -F': *' '/^name:/ {print $2; exit}' | tr -d '"' | tr -d "'")"
+          version="$(helm show chart "$CHART_DIR" | awk -F': *' '/^version:/ {print $2; exit}' | tr -d '"' | tr -d "'")"
+          if [ -n "$CHART_VERSION_OVERRIDE" ]; then
+            version="$CHART_VERSION_OVERRIDE"
           fi
           echo "chart_name=$name" >> "$GITHUB_OUTPUT"
           echo "chart_version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Lint chart
         if: inputs.lint
-        run: helm lint "${{ inputs.chart_dir }}"
+        env:
+          CHART_DIR: ${{ inputs.chart_dir }}
+        run: helm lint "$CHART_DIR"
 
       - name: Warn on unsupported sign flag
         if: inputs.sign
@@ -105,27 +107,31 @@ jobs:
           echo "::warning::sign=true is reserved for future cosign integration; skipping."
 
       - name: Package chart
+        env:
+          CHART_DIR: ${{ inputs.chart_dir }}
+          CHART_VERSION_OVERRIDE: ${{ inputs.chart_version }}
+          APP_VERSION_OVERRIDE: ${{ inputs.app_version }}
         run: |
           set -euo pipefail
           args=()
-          if [ -n "${{ inputs.chart_version }}" ]; then
-            args+=(--version "${{ inputs.chart_version }}")
+          if [ -n "$CHART_VERSION_OVERRIDE" ]; then
+            args+=(--version "$CHART_VERSION_OVERRIDE")
           fi
-          if [ -n "${{ inputs.app_version }}" ]; then
-            args+=(--app-version "${{ inputs.app_version }}")
+          if [ -n "$APP_VERSION_OVERRIDE" ]; then
+            args+=(--app-version "$APP_VERSION_OVERRIDE")
           fi
-          helm package "${{ inputs.chart_dir }}" --destination "$RUNNER_TEMP" "${args[@]}"
+          helm package "$CHART_DIR" --destination "$RUNNER_TEMP" "${args[@]}"
 
       - name: Log in to OCI registry
         env:
           REGISTRY: ${{ inputs.registry }}
+          REGISTRY_USERNAME: ${{ secrets.registry_username || github.actor }}
+          REGISTRY_PASSWORD: ${{ secrets.registry_password || github.token }}
         run: |
           set -euo pipefail
           host="${REGISTRY#oci://}"
           host="${host%%/*}"
-          username="${{ secrets.registry_username || github.actor }}"
-          password="${{ secrets.registry_password || github.token }}"
-          echo "$password" | helm registry login "$host" --username "$username" --password-stdin
+          echo "$REGISTRY_PASSWORD" | helm registry login "$host" --username "$REGISTRY_USERNAME" --password-stdin
 
       - name: Push chart
         id: publish

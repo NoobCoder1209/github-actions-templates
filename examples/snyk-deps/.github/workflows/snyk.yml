@@ -19,7 +19,6 @@ jobs:
     with:
       language: node
       severity_threshold: medium
-      working_directory: .
       args: --all-projects
     secrets:
       snyk_token: ${{ secrets.SNYK_TOKEN }}

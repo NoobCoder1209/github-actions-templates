@@ -6,7 +6,7 @@
 #   - trigger the calling job on `push: tags: ['v*.*.*']`.
 #   - declare `permissions: contents: write` on the calling job.
 #
-# Uses softprops/action-gh-release@v2 for asset glob support; no
+# Uses softprops/action-gh-release@v3 for asset glob support; no
 # release-please / semantic-release dependency.
 name: semver-release
 
@@ -54,8 +54,6 @@ on:
         description: "Resolved previous tag used for the changelog."
         value: ${{ jobs.release.outputs.previous_tag }}
 
-permissions: {}
-
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -75,11 +73,14 @@ jobs:
       - name: Generate changelog
         id: changelog
         if: inputs.body_path == ''
+        env:
+          PREV_INPUT: ${{ inputs.previous_tag }}
+          TAG_NAME: ${{ inputs.tag_name }}
         run: |
           set -euo pipefail
-          prev="${{ inputs.previous_tag }}"
+          prev="$PREV_INPUT"
           if [ -z "$prev" ]; then
-            prev="$(git describe --tags --abbrev=0 "${{ inputs.tag_name }}^" 2>/dev/null || true)"
+            prev="$(git describe --tags --abbrev=0 "${TAG_NAME}^" 2>/dev/null || true)"
           fi
           echo "previous_tag=$prev" >> "$GITHUB_OUTPUT"
 
@@ -87,9 +88,9 @@ jobs:
           {
             echo 'body<<CHANGELOG_EOF'
             if [ -n "$prev" ]; then
-              ./scripts/changelog.sh "$prev" "${{ inputs.tag_name }}"
+              ./scripts/changelog.sh "$prev" "$TAG_NAME"
             else
-              echo "## ${{ inputs.tag_name }}"
+              echo "## $TAG_NAME"
               echo
               echo "Initial release."
             fi

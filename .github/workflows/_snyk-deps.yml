@@ -19,13 +19,8 @@ on:
         type: string
         required: false
         default: "medium"
-      working_directory:
-        description: "Project root for Snyk."
-        type: string
-        required: false
-        default: "."
       args:
-        description: "Extra Snyk CLI args."
+        description: "Extra Snyk CLI args. Default scans the repo root with --all-projects."
         type: string
         required: false
         default: "--all-projects"
@@ -51,8 +46,6 @@ on:
         description: "'true' if Snyk found any issues at or above the threshold."
         value: ${{ jobs.scan.outputs.issues_found }}
 
-permissions: {}
-
 jobs:
   scan:
     runs-on: ubuntu-latest
@@ -65,11 +58,13 @@ jobs:
       issues_found: ${{ steps.snyk-node.outcome == 'failure' || steps.snyk-python.outcome == 'failure' || steps.snyk-go.outcome == 'failure' }}
     steps:
       - name: Validate language
+        env:
+          LANGUAGE: ${{ inputs.language }}
         run: |
           set -euo pipefail
-          case "${{ inputs.language }}" in
+          case "$LANGUAGE" in
             node|python|go) ;;
-            *) echo "::error::language must be one of node|python|go (got '${{ inputs.language }}')"; exit 1 ;;
+            *) echo "::error::language must be one of node|python|go (got '$LANGUAGE')"; exit 1 ;;
           esac
 
       - name: Checkout
@@ -101,7 +96,7 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.snyk_token }}
         with:
-          args: ${{ inputs.args }} --severity-threshold=${{ inputs.severity_threshold }} --sarif-file-output=snyk.sarif --file=${{ inputs.working_directory }}
+          args: ${{ inputs.args }} --severity-threshold=${{ inputs.severity_threshold }} --sarif-file-output=snyk.sarif
 
       - name: Snyk test (Python)
         id: snyk-python
@@ -131,6 +126,8 @@ jobs:
           category: ${{ inputs.category }}-${{ inputs.language }}
 
       - name: Gate
+        env:
+          SEVERITY_THRESHOLD: ${{ inputs.severity_threshold }}
         run: |
           set -euo pipefail
           # Aggregate outcomes from the three language-specific Snyk steps.
@@ -138,7 +135,7 @@ jobs:
           outcomes="${{ steps.snyk-node.outcome }} ${{ steps.snyk-python.outcome }} ${{ steps.snyk-go.outcome }}"
           for o in $outcomes; do
             if [ "$o" = "failure" ]; then
-              echo "Snyk reported issues at or above threshold '${{ inputs.severity_threshold }}'"
+              echo "Snyk reported issues at or above threshold '$SEVERITY_THRESHOLD'"
               exit 1
             fi
           done

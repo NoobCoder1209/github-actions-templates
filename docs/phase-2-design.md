@@ -97,7 +97,7 @@ permissions:
 
 ### Action versions
 
-`actions/checkout@v6` (with `fetch-depth: 0`, `fetch-tags: true`), `softprops/action-gh-release@v2`.
+`actions/checkout@v6` (with `fetch-depth: 0`, `fetch-tags: true`), `softprops/action-gh-release@v3`.
 
 ---
 
@@ -195,7 +195,6 @@ permissions:
 |---|---|---|---|---|
 | `language` | string | yes | — | `node`, `python`, `go`. |
 | `severity_threshold` | string | no | `medium` | `low|medium|high|critical`. |
-| `working_directory` | string | no | `.` | |
 | `args` | string | no | `--all-projects` | Extra Snyk CLI args. |
 | `runtime_version` | string | no | `''` | Optional runtime pin. |
 | `category` | string | no | `snyk` | SARIF category. |
@@ -218,7 +217,7 @@ permissions:
 
 ### Action versions
 
-`actions/checkout@v6`, `actions/setup-node@v4` / `actions/setup-python@v6` / `actions/setup-go@v6`, `snyk/actions/{node,python,golang}@v1`, `github/codeql-action/upload-sarif@v4`.
+`actions/checkout@v6`, `actions/setup-node@v6` / `actions/setup-python@v6` / `actions/setup-go@v6`, `snyk/actions/{node,python,golang}@v1`, `github/codeql-action/upload-sarif@v4`.
 
 ### Continue-on-error pattern
 
@@ -245,11 +244,11 @@ Snyk step has `continue-on-error: true` + `id: snyk` + `--sarif-file-output=snyk
 
 ### Supported tools
 
-- `helm` → `azure/setup-helm@v4`
-- `kubectl` → `azure/setup-kubectl@v4`
+- `helm` → `azure/setup-helm@v5`
+- `kubectl` → `azure/setup-kubectl@v5`
 - `kind` → `helm/kind-action@v1`
-- `terraform` → `hashicorp/setup-terraform@v3`
-- `tflint` → `terraform-linters/setup-tflint@v5`
+- `terraform` → `hashicorp/setup-terraform@v4`
+- `tflint` → `terraform-linters/setup-tflint@v6`
 - `helm-docs` → `curl | tar` from GitHub releases
 
 ---

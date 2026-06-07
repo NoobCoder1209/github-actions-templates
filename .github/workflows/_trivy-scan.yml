@@ -52,8 +52,6 @@ on:
         description: "'true' if the gating pass found vulnerabilities."
         value: ${{ jobs.scan.outputs.vulnerabilities_found }}
 
-permissions: {}
-
 jobs:
   scan:
     runs-on: ubuntu-latest
@@ -63,7 +61,7 @@ jobs:
       packages: read
     outputs:
       sarif_path: trivy-results.sarif
-      vulnerabilities_found: ${{ steps.gate.outputs.found }}
+      vulnerabilities_found: ${{ steps.mark.outputs.found || 'false' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -101,5 +99,6 @@ jobs:
           exit-code: ${{ inputs.exit_code }}
 
       - name: Mark vulnerabilities found
-        if: failure() && steps.gate.outcome == 'failure'
+        id: mark
+        if: always() && steps.gate.outcome == 'failure'
         run: echo "found=true" >> "$GITHUB_OUTPUT"

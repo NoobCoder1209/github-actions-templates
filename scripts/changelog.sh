@@ -14,7 +14,9 @@ if [ -n "${GITHUB_REPOSITORY:-}" ]; then
   repo="$GITHUB_REPOSITORY"
 else
   origin="$(git config --get remote.origin.url || true)"
-  repo="$(printf '%s' "$origin" | sed -E 's#.*[:/]([^/]+/[^/]+)(\.git)?$#\1#')"
+  # Strip a trailing .git, then take the last two path segments as owner/repo.
+  # Works for both git@host:owner/repo(.git) and https://host/.../owner/repo(.git).
+  repo="$(printf '%s' "${origin%.git}" | awk -F'[:/]' '{print $(NF-1) "/" $NF}')"
 fi
 
 # Bucket helper. Pattern is a regex applied against `<sha> <subject>`.
