@@ -1,5 +1,4 @@
 name: smoke
-
 on:
   push:
     branches: [main]
@@ -10,6 +9,14 @@ jobs:
   call-minimal:
     permissions:
       contents: read
+      packages: read
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/_minimal.yml
     with:
-      msg: bisect
+      image: smoke/hello
+      context: ./fixtures/docker
+      dockerfile: Dockerfile
+      platforms: linux/amd64
+      push: false
+      provenance: false

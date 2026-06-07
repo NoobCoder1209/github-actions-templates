@@ -1,17 +1,61 @@
 name: minimal-callee
-
 on:
   workflow_call:
     inputs:
-      msg:
+      image:
+        type: string
+        required: true
+      tag:
         type: string
         required: false
-        default: "hello"
+        default: ""
+      platforms:
+        type: string
+        required: false
+        default: linux/amd64,linux/arm64
+      context:
+        type: string
+        required: false
+        default: "."
+      dockerfile:
+        type: string
+        required: false
+        default: Dockerfile
+      push:
+        type: boolean
+        required: false
+        default: true
+      registry:
+        type: string
+        required: false
+        default: ghcr.io
+      provenance:
+        type: boolean
+        required: false
+        default: true
+      build-args:
+        type: string
+        required: false
+        default: ""
+    secrets:
+      registry_username:
+        required: false
+      registry_password:
+        required: false
+    outputs:
+      image_ref:
+        description: x
+        value: ${{ jobs.run.outputs.image_ref }}
 
 jobs:
   run:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    outputs:
+      image_ref: ""
     steps:
-      - run: echo "${{ inputs.msg }}"
+      - run: echo "inputs OK image=${{ inputs.image }}"
