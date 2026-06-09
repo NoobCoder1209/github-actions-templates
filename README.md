@@ -6,6 +6,18 @@
 [![smoke](https://github.com/NoobCoder1209/github-actions-templates/actions/workflows/smoke.yml/badge.svg)](https://github.com/NoobCoder1209/github-actions-templates/actions/workflows/smoke.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+## Demo
+
+In-repo `smoke` workflow self-calls `_docker-buildx` against a fixture Dockerfile on every PR — green = the most-used reusable in the library actually works end-to-end.
+
+![smoke green](docs/screenshots/smoke-green.png)
+
+Real consumer (`NoobCoder1209/DevOpsCourse`) wires `_docker-buildx@v0.1.0` into its `build-and-push.yml` — the resulting GHCR image carries the auto-applied tags **and** a `sha256-...` SLSA build-provenance attestation referrer:
+
+![GHCR tags from a real consumer](docs/screenshots/dogfood-ghcr-tags.png)
+
+End-to-end walkthrough, every prerequisite, and the failure modes we hit while building this: see [`guide.md`](guide.md).
+
 ## Why
 
 Every project ends up rebuilding the same five GitHub Actions workflows: a multi-arch container build, a release-on-tag, a Helm publish, an image vulnerability scan, a dependency scan. This repo packages those as `workflow_call` reusables so consumers can drop a 15-line caller into `.github/workflows/` and be done.
@@ -48,7 +60,7 @@ jobs:
       attestations: write
     uses: NoobCoder1209/github-actions-templates/.github/workflows/_docker-buildx.yml@v0.1.0
     with:
-      image: ${{ github.repository }}
+      image: ${{ github.repository }}    # NB: GHCR rejects uppercase — pre-lowercase if your owner/repo has any (see guide.md → Common failure modes)
       platforms: linux/amd64,linux/arm64
       push: ${{ github.event_name != 'pull_request' }}
 ```

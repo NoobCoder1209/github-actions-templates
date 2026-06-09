@@ -1,3 +1,7 @@
+# NB: GHCR rejects mixed-case image paths. If your owner or repo
+# name has any uppercase, replace ${{ github.repository }} below
+# with a hardcoded lowercase value. GHA expressions have no
+# tolower() function.
 name: Build & Push Container Image (GHCR)
 
 on:

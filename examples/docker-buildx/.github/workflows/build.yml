@@ -2,6 +2,11 @@
 #
 # Copy this into a target repo's .github/workflows/build.yml.
 # Pin the @v0.1.0 tag — never use @main.
+#
+# NB: GHCR rejects mixed-case image paths. If your owner or repo
+# has any uppercase, replace ${{ github.repository }} below with a
+# hardcoded lowercase value (e.g. `image: my-org/my-app`). GHA
+# expressions don't have a tolower() function.
 name: build
 
 on:
