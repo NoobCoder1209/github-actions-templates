@@ -89,13 +89,14 @@ Screenshot of a real green run: [`docs/screenshots/smoke-green.png`](docs/screen
 2. **Look at the resulting image:**
    <https://github.com/NoobCoder1209/DevOpsCourse/pkgs/container/devopscourse>
 
-   You should see at least these tags on the latest version:
+   You should see, on the **latest** version:
 
    - `latest` — applied because the build was on the default branch
-   - `sha-<7-char>` — short-SHA tag passed in by the consumer
-   - `sha-<40-char>` — long-SHA tag added automatically by the reusable's `metadata-action`
+   - `sha-<40-char>` — long-SHA tag emitted by `metadata-action`'s `type=sha,format=long`
    - `main` — branch ref tag, also auto-added
-   - `sha256-<digest>` — **this one is the SLSA build provenance attestation referrer**, attached as an OCI subject by `actions/attest-build-provenance@v4`. Its presence is concrete proof the supply-chain attestation step ran successfully.
+   - `sha256-<digest>` — **the SLSA build provenance attestation referrer**, attached as an OCI subject by `actions/attest-build-provenance@v4`. Its presence is concrete proof the supply-chain attestation step ran successfully.
+
+   (Older image versions in the screenshot carry `sha-<7-char>` tags — those are from a previous build pipeline. The current `v0.1.0` reusable emits long-SHA via `metadata-action`; if a consumer wants a short-SHA tag they pass it explicitly via the `tag:` input.)
 
    Screenshot: [`docs/screenshots/dogfood-ghcr-tags.png`](docs/screenshots/dogfood-ghcr-tags.png).
 
@@ -139,7 +140,7 @@ git checkout -b feature/use-reusable-buildx
          attestations: write
        uses: NoobCoder1209/github-actions-templates/.github/workflows/_docker-buildx.yml@v0.1.0
        with:
-         image: ${{ github.repository }}     # automatically lowercased by metadata-action's normalisation? NO — see "Common failure modes" below
+         image: <your-owner-lowercased>/<your-repo-lowercased>   # GHCR rejects mixed case; see "Common failure modes" below
          platforms: linux/amd64,linux/arm64
          push: ${{ github.event_name != 'pull_request' }}
    ```

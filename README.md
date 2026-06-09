@@ -60,7 +60,7 @@ jobs:
       attestations: write
     uses: NoobCoder1209/github-actions-templates/.github/workflows/_docker-buildx.yml@v0.1.0
     with:
-      image: ${{ github.repository }}
+      image: ${{ github.repository }}    # NB: GHCR rejects uppercase — pre-lowercase if your owner/repo has any (see guide.md → Common failure modes)
       platforms: linux/amd64,linux/arm64
       push: ${{ github.event_name != 'pull_request' }}
 ```
